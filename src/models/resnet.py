@@ -25,6 +25,10 @@ class ResNet(nn.Module):
             base = tv_models.resnet18(
                 weights=tv_models.ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
             )
+        elif variant == "resnet34":
+            base = tv_models.resnet34(
+                weights=tv_models.ResNet34_Weights.IMAGENET1K_V1 if pretrained else None
+            )
         elif variant == "resnet50":
             base = tv_models.resnet50(
                 weights=tv_models.ResNet50_Weights.IMAGENET1K_V2 if pretrained else None
@@ -63,5 +67,6 @@ class ResNet(nn.Module):
         return sum(p.numel() for p in self.parameters())
 
 
-def build_resnet(variant: str, num_classes: int = 10, pretrained: bool = False) -> ResNet:
+def build_resnet(variant: str, num_classes: int = 10, pretrained: bool = False) -> "ResNet":
+    """Build a CIFAR-adapted ResNet.  variant ∈ {resnet18, resnet34, resnet50}."""
     return ResNet(variant=variant, num_classes=num_classes, pretrained=pretrained)

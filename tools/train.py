@@ -9,11 +9,11 @@ Usage examples:
 # Baseline (no KD)
 python tools/train.py --kd-type none --output-dir runs/baseline
 
-# Logit-KD
+# Logit-KD (R50 teacher → R18 student)
 python tools/train.py --kd-type logit --alpha 0.5 --temperature 4 --output-dir runs/logit_a0.5_t4
 
-# Feature-KD
-python tools/train.py --kd-type feature --alpha 0.5 --output-dir runs/feature_a0.5
+# Feature-KD via config file
+python tools/train.py --config configs/r34_to_r18_feature.yaml
 """
 
 import sys
@@ -21,6 +21,7 @@ import argparse
 import logging
 from pathlib import Path
 
+import yaml
 import torch
 from torch.utils.data import DataLoader
 import torchvision
@@ -28,9 +29,11 @@ import torchvision.transforms as T
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src.utils.seed import set_seed
 from src.models.resnet import build_resnet
 from src.models.kd_model import KDModel
 from src.losses.kd_loss import KDLoss
+from src.distillation.feature_kd import RESNET_BASIC_CHANNELS, RESNET_BOTTLENECK_CHANNELS
 from src.trainer import Trainer
 
 logging.basicConfig(
@@ -40,16 +43,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger("train")
 
+# Channel map by architecture family
+_ARCH_CHANNELS = {
+    "resnet18": RESNET_BASIC_CHANNELS,
+    "resnet34": RESNET_BASIC_CHANNELS,
+    "resnet50": RESNET_BOTTLENECK_CHANNELS,
+}
 
-def parse_args() -> argparse.Namespace:
+
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="KD-CIFAR10 Training",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
+    p.add_argument("--config", default=None,
+                   help="Path to YAML config file. CLI flags override config values.")
+
     # Model
-    p.add_argument("--model", default="resnet18", choices=["resnet18", "resnet50"],
-                   help="Student model architecture. Use resnet50 for teacher training.")
+    p.add_argument("--model", default="resnet18",
+                   choices=["resnet18", "resnet34", "resnet50"],
+                   help="Student architecture.")
+    p.add_argument("--teacher", default="resnet50",
+                   choices=["resnet18", "resnet34", "resnet50"],
+                   help="Teacher architecture (ignored when --kd-type none).")
 
     # KD settings
     p.add_argument("--kd-type", default="logit", choices=["logit", "feature", "none"])
@@ -71,11 +88,27 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--weight-decay", type=float, default=5e-4)
     p.add_argument("--momentum",     type=float, default=0.9)
 
-    # Output
+    # Output / misc
     p.add_argument("--output-dir",  default="runs/experiment")
     p.add_argument("--num-workers", type=int, default=4)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--seed", type=int, default=42)
+
+    return p
+
+
+def parse_args() -> argparse.Namespace:
+    p = build_parser()
+
+    # Two-pass: first extract --config, then re-parse with YAML as defaults.
+    pre, _ = p.parse_known_args()
+    if pre.config:
+        with open(pre.config) as f:
+            cfg = yaml.safe_load(f) or {}
+        # Replace hyphens → underscores so YAML keys match argparse dests
+        cfg = {k.replace("-", "_"): v for k, v in cfg.items()}
+        cfg.pop("config", None)  # don't overwrite the config path itself
+        p.set_defaults(**cfg)
 
     return p.parse_args()
 
@@ -112,9 +145,8 @@ def build_dataloaders(batch_size: int, num_workers: int):
 def main() -> None:
     args = parse_args()
 
-    torch.manual_seed(args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
+    set_seed(args.seed)
+    logger.info(f"Seed: {args.seed}")
 
     device = torch.device(args.device)
     logger.info(f"Device: {device}")
@@ -127,11 +159,11 @@ def main() -> None:
 
     # ---- Models ----
     student = build_resnet(args.model, num_classes=10, pretrained=False)
-    logger.info(f"Student params: {student.num_parameters:,}")
+    logger.info(f"Student ({args.model}): {student.num_parameters:,} params")
 
     if args.kd_type != "none":
-        teacher = build_resnet("resnet50", num_classes=10, pretrained=False)
-        logger.info(f"Teacher params: {teacher.num_parameters:,}")
+        teacher = build_resnet(args.teacher, num_classes=10, pretrained=False)
+        logger.info(f"Teacher ({args.teacher}): {teacher.num_parameters:,} params")
 
         if args.teacher_weights:
             logger.info(f"Loading teacher weights: {args.teacher_weights}")
@@ -151,8 +183,8 @@ def main() -> None:
         alpha=args.alpha,
         temperature=args.temperature,
         feat_beta=args.feat_beta,
-        student_channels=512,
-        teacher_channels=2048,
+        student_channels=_ARCH_CHANNELS[args.model],
+        teacher_channels=_ARCH_CHANNELS[args.teacher],
     )
 
     # ---- Optimizer ----

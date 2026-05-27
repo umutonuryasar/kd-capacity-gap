@@ -1,0 +1,23 @@
+# R34 → R18  |  Logit-KD (Hinton et al., 2015)
+#
+# Capacity gap: R34 (21.3M) → R18 (11.2M)
+# Both architectures use BasicBlock, so the teacher has the same channel widths
+# as the student but is strictly deeper (3-4-6-3 vs 2-2-2-2 blocks).
+# This is a "same-family, depth-gap" distillation setting.
+
+model:           resnet18
+teacher:         resnet34
+
+kd_type:         logit
+alpha:           0.5        # L_total = 0.5·L_kd + 0.5·L_ce
+temperature:     4.0
+
+epochs:          100
+batch_size:      128
+lr:              0.1
+weight_decay:    5.0e-4
+momentum:        0.9
+
+seed:            42
+num_workers:     4
+output_dir:      runs/r34_to_r18_logit

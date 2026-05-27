@@ -17,17 +17,18 @@ Combined:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
 
 
-# ResNet-18 and ResNet-50 output channels per stage
-STUDENT_CHANNELS = {
+# Channel widths per ResNet family.
+# R18 and R34 use BasicBlock (no expansion), so they share the same widths.
+# R50+ use Bottleneck (expansion=4), yielding 4× wider feature maps.
+RESNET_BASIC_CHANNELS: dict[str, int] = {
     "layer1": 64,
     "layer2": 128,
     "layer3": 256,
     "layer4": 512,
 }
-TEACHER_CHANNELS = {
+RESNET_BOTTLENECK_CHANNELS: dict[str, int] = {
     "layer1": 256,
     "layer2": 512,
     "layer3": 1024,
@@ -39,16 +40,18 @@ class FeatureKDLoss(nn.Module):
     """Multi-layer feature alignment KD loss.
 
     Args:
-        student_channels: Dict of layer -> channel count for student.
-        teacher_channels: Dict of layer -> channel count for teacher.
-        beta:             Weight for cosine similarity term.
+        student_channels: Dict of layer -> channel count for the student.
+                          Defaults to RESNET_BASIC_CHANNELS (R18 / R34).
+        teacher_channels: Dict of layer -> channel count for the teacher.
+                          Defaults to RESNET_BOTTLENECK_CHANNELS (R50).
+        beta:             Weight for the cosine similarity term.
         layers:           Which ResNet stages to align.
     """
 
     def __init__(
         self,
-        student_channels: int = 512,   # kept for API compat, unused
-        teacher_channels: int = 2048,  # kept for API compat, unused
+        student_channels: dict[str, int] | None = None,
+        teacher_channels: dict[str, int] | None = None,
         beta: float = 0.5,
         layers: list[str] | None = None,
     ):
@@ -56,11 +59,14 @@ class FeatureKDLoss(nn.Module):
         self.beta   = beta
         self.layers = layers or ["layer1", "layer2", "layer3", "layer4"]
 
-        # 1x1 Conv projections: student_dim -> teacher_dim per layer
+        s_ch_map = student_channels or RESNET_BASIC_CHANNELS
+        t_ch_map = teacher_channels or RESNET_BOTTLENECK_CHANNELS
+
+        # 1×1 Conv projections: student_dim → teacher_dim per layer
         self.projections = nn.ModuleDict()
         for layer in self.layers:
-            s_ch = STUDENT_CHANNELS[layer]
-            t_ch = TEACHER_CHANNELS[layer]
+            s_ch = s_ch_map[layer]
+            t_ch = t_ch_map[layer]
             proj = nn.Conv2d(s_ch, t_ch, kernel_size=1, bias=False)
             nn.init.xavier_uniform_(proj.weight)
             self.projections[layer] = proj

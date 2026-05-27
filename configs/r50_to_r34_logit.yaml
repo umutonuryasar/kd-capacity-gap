@@ -1,0 +1,23 @@
+# R50 → R34  |  Logit-KD (Hinton et al., 2015)
+#
+# Capacity gap: R50 (25.6M) → R34 (21.3M)
+# Cross-family distillation: Bottleneck teacher (R50, 256/512/1024/2048 channels)
+# to BasicBlock student (R34, 64/128/256/512 channels).
+# The logit-KD loss is architecture-agnostic so no channel alignment is needed.
+
+model:           resnet34
+teacher:         resnet50
+
+kd_type:         logit
+alpha:           0.5        # L_total = 0.5·L_kd + 0.5·L_ce
+temperature:     4.0
+
+epochs:          100
+batch_size:      128
+lr:              0.1
+weight_decay:    5.0e-4
+momentum:        0.9
+
+seed:            42
+num_workers:     4
+output_dir:      runs/r50_to_r34_logit

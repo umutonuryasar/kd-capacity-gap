@@ -29,8 +29,10 @@ class KDLoss(nn.Module):
                           α=1 → pure distillation
         temperature:      Softmax temperature T (logit KD only).
         feat_beta:        Cosine similarity weight inside FeatureKD.
-        student_channels: Student layer4 output channels (feature KD only).
-        teacher_channels: Teacher layer4 output channels (feature KD only).
+        student_channels: Per-layer channel dict for the student (feature KD only).
+                          None defaults to RESNET_BASIC_CHANNELS (R18 / R34).
+        teacher_channels: Per-layer channel dict for the teacher (feature KD only).
+                          None defaults to RESNET_BOTTLENECK_CHANNELS (R50).
     """
 
     def __init__(
@@ -39,8 +41,8 @@ class KDLoss(nn.Module):
         alpha: float = 0.5,
         temperature: float = 4.0,
         feat_beta: float = 0.5,
-        student_channels: int = 512,
-        teacher_channels: int = 2048,
+        student_channels: dict[str, int] | None = None,
+        teacher_channels: dict[str, int] | None = None,
     ):
         super().__init__()
         assert kd_type in ("logit", "feature", "none"), \
@@ -54,8 +56,8 @@ class KDLoss(nn.Module):
             self.kd_loss_fn = LogitKDLoss(temperature=temperature)
         elif kd_type == "feature":
             self.kd_loss_fn = FeatureKDLoss(
-                student_channels=student_channels,
-                teacher_channels=teacher_channels,
+                student_channels=student_channels,  # None → RESNET_BASIC_CHANNELS default
+                teacher_channels=teacher_channels,  # None → RESNET_BOTTLENECK_CHANNELS default
                 beta=feat_beta,
             )
         else:

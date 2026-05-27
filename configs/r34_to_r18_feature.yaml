@@ -1,0 +1,23 @@
+# R34 → R18  |  Feature-KD (multi-layer alignment)
+#
+# Capacity gap: R34 (21.3M) → R18 (11.2M)
+# R18 and R34 share identical channel widths per stage (64/128/256/512),
+# so the 1×1 projection matrices are square. The alignment loss penalises
+# the depth-induced representational difference rather than channel mismatch.
+
+model:           resnet18
+teacher:         resnet34
+
+kd_type:         feature
+alpha:           0.5        # L_total = 0.5·L_feat + 0.5·L_ce
+feat_beta:       0.5        # L_feat = L_mse + 0.5·L_cos
+
+epochs:          100
+batch_size:      128
+lr:              0.1
+weight_decay:    5.0e-4
+momentum:        0.9
+
+seed:            42
+num_workers:     4
+output_dir:      runs/r34_to_r18_feature
