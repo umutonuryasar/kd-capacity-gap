@@ -25,8 +25,8 @@ FEAT_BETA=0.5
 DEVICE="${DEVICE:-cuda}"
 
 # Pre-trained teacher checkpoints (must exist before running KD experiments)
-TEACHER_R50="${TEACHER_R50:-runs/teachers/r50/checkpoint_best.pth}"
-TEACHER_R34="${TEACHER_R34:-runs/teachers/r34/checkpoint_best.pth}"
+TEACHER_R50="${TEACHER_R50:-checkpoints/teacher_r50.pth}"
+TEACHER_R34="${TEACHER_R34:-checkpoints/teacher_r34.pth}"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 TOTAL=$((${#SEEDS[@]} * 3 * 2))   # 3 pairs × 2 KD types × 3 seeds
