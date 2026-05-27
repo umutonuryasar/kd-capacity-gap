@@ -16,12 +16,12 @@ set -uo pipefail
 
 # ── Hyper-parameters ──────────────────────────────────────────────────────────
 SEEDS=(0 1 2)
-EPOCHS=100
-BS=128
-LR=0.1
-ALPHA=0.5
-TEMPERATURE=4.0
-FEAT_BETA=0.5
+EPOCHS="${EPOCHS:-100}"
+BS="${BS:-128}"
+LR="${LR:-0.1}"
+ALPHA="${ALPHA:-0.5}"
+TEMPERATURE="${TEMPERATURE:-4.0}"
+FEAT_BETA="${FEAT_BETA:-0.5}"
 DEVICE="${DEVICE:-cuda}"
 
 # Pre-trained teacher checkpoints (must exist before running KD experiments)
