@@ -1,86 +1,105 @@
 #!/bin/bash
-# KD-CIFAR10 Ablation Study — Experiment 2 (CIFAR-specific architecture)
-# Loss: L_total = α · L_kd + (1 - α) · L_ce  (Hinton et al., 2015)
+# KD-CIFAR10 Full Ablation
 #
-# Grid:
-#   Logit-KD α sweep: α ∈ {0.3, 0.5, 0.7}, T=2 (best from Exp 1)
-#   Logit-KD T sweep: T ∈ {2, 3, 4}, α=0.5 (best from Exp 1)
-#   Feature-KD α sweep: α ∈ {0.3, 0.5, 0.7}, β=0.5
-#   Total: 8 unique runs (logit_a0.5_t2 shared between α and T sweeps)
+# Pairs:  R50→R18  |  R34→R18  |  R50→R34
+# Types:  logit-KD  |  feature-KD
+# Seeds:  0  1  2
+# Total:  3 pairs × 2 KD types × 3 seeds = 18 runs
+#
+# Output layout:
+#   runs/{teacher}_to_{student}/{kd_type}/seed{seed}/
+#
+# Aggregate mean ± std across seeds with:
+#   python tools/collect_results.py runs/
 
-TEACHER="runs/teacher_r50_v2/checkpoint_best.pth"
+set -uo pipefail
+
+# ── Hyper-parameters ──────────────────────────────────────────────────────────
+SEEDS=(0 1 2)
 EPOCHS=100
 BS=128
 LR=0.1
-DEVICE="cuda"
+ALPHA=0.5
+TEMPERATURE=4.0
+FEAT_BETA=0.5
+DEVICE="${DEVICE:-cuda}"
 
-echo "============================================"
-echo "KD-CIFAR10 Ablation Study — Experiment 2"
-echo "Loss: L_total = α·L_kd + (1-α)·L_ce"
-echo "Teacher: $TEACHER"
-echo "============================================"
+# Pre-trained teacher checkpoints (must exist before running KD experiments)
+TEACHER_R50="${TEACHER_R50:-runs/teachers/r50/checkpoint_best.pth}"
+TEACHER_R34="${TEACHER_R34:-runs/teachers/r34/checkpoint_best.pth}"
 
-# ── Logit-KD: alpha sweep (T=2 fixed) ────────────────────────────────────
-echo "[1/8] Logit-KD α=0.3 T=2"
-python tools/train.py --model resnet18 \
-    --kd-type logit --alpha 0.3 --temperature 2 \
-    --epochs $EPOCHS --batch-size $BS --lr $LR \
-    --teacher-weights $TEACHER \
-    --output-dir runs/logit_a0.3_t2 --device $DEVICE
+# ── Helpers ───────────────────────────────────────────────────────────────────
+TOTAL=$((${#SEEDS[@]} * 3 * 2))   # 3 pairs × 2 KD types × 3 seeds
+COUNT=0
+FAILED=()
 
-echo "[2/8] Logit-KD α=0.5 T=2  (shared with T-sweep run 4)"
-python tools/train.py --model resnet18 \
-    --kd-type logit --alpha 0.5 --temperature 2 \
-    --epochs $EPOCHS --batch-size $BS --lr $LR \
-    --teacher-weights $TEACHER \
-    --output-dir runs/logit_a0.5_t2 --device $DEVICE
+run_exp() {
+    local student=$1 teacher=$2 kd_type=$3 seed=$4 teacher_ckpt=$5
 
-echo "[3/8] Logit-KD α=0.7 T=2"
-python tools/train.py --model resnet18 \
-    --kd-type logit --alpha 0.7 --temperature 2 \
-    --epochs $EPOCHS --batch-size $BS --lr $LR \
-    --teacher-weights $TEACHER \
-    --output-dir runs/logit_a0.7_t2 --device $DEVICE
+    COUNT=$((COUNT + 1))
+    local tag="${teacher}_to_${student}/${kd_type}/seed${seed}"
+    local out="runs/${tag}"
 
-# ── Logit-KD: temperature sweep (α=0.5 fixed) ────────────────────────────
-# T=2 already done above (runs/logit_a0.5_t2)
+    echo ""
+    echo "── [${COUNT}/${TOTAL}] ${tag} ──────────────────────────────────"
 
-echo "[5/8] Logit-KD α=0.5 T=3"
-python tools/train.py --model resnet18 \
-    --kd-type logit --alpha 0.5 --temperature 3 \
-    --epochs $EPOCHS --batch-size $BS --lr $LR \
-    --teacher-weights $TEACHER \
-    --output-dir runs/logit_a0.5_t3 --device $DEVICE
+    if [[ ! -f "${teacher_ckpt}" ]]; then
+        echo "  SKIP: teacher checkpoint not found: ${teacher_ckpt}"
+        FAILED+=("${tag} (missing teacher weights)")
+        return
+    fi
 
-echo "[6/8] Logit-KD α=0.5 T=4"
-python tools/train.py --model resnet18 \
-    --kd-type logit --alpha 0.5 --temperature 4 \
-    --epochs $EPOCHS --batch-size $BS --lr $LR \
-    --teacher-weights $TEACHER \
-    --output-dir runs/logit_a0.5_t4 --device $DEVICE
+    python tools/train.py \
+        --model        "${student}"     \
+        --teacher      "${teacher}"     \
+        --kd-type      "${kd_type}"     \
+        --alpha        "${ALPHA}"       \
+        --temperature  "${TEMPERATURE}" \
+        --feat-beta    "${FEAT_BETA}"   \
+        --teacher-weights "${teacher_ckpt}" \
+        --seed         "${seed}"        \
+        --epochs       "${EPOCHS}"      \
+        --batch-size   "${BS}"          \
+        --lr           "${LR}"          \
+        --device       "${DEVICE}"      \
+        --output-dir   "${out}"         \
+    || FAILED+=("${tag}")
+}
 
-# ── Feature-KD: alpha sweep ───────────────────────────────────────────────
-echo "[7/8] Feature-KD α=0.3"
-python tools/train.py --model resnet18 \
-    --kd-type feature --alpha 0.3 --feat-beta 0.5 \
-    --epochs $EPOCHS --batch-size $BS --lr $LR \
-    --teacher-weights $TEACHER \
-    --output-dir runs/feature_a0.3 --device $DEVICE
+# ── Main loop ─────────────────────────────────────────────────────────────────
+echo "======================================================"
+echo "  KD-CIFAR10 Full Ablation"
+echo "  Pairs:  R50→R18 | R34→R18 | R50→R34"
+echo "  Types:  logit | feature"
+echo "  Seeds:  ${SEEDS[*]}"
+echo "  Total:  ${TOTAL} runs"
+echo "======================================================"
 
-echo "[8/8] Feature-KD α=0.5"
-python tools/train.py --model resnet18 \
-    --kd-type feature --alpha 0.5 --feat-beta 0.5 \
-    --epochs $EPOCHS --batch-size $BS --lr $LR \
-    --teacher-weights $TEACHER \
-    --output-dir runs/feature_a0.5 --device $DEVICE
+for SEED in "${SEEDS[@]}"; do
 
-echo "[9/8] Feature-KD α=0.7"
-python tools/train.py --model resnet18 \
-    --kd-type feature --alpha 0.7 --feat-beta 0.5 \
-    --epochs $EPOCHS --batch-size $BS --lr $LR \
-    --teacher-weights $TEACHER \
-    --output-dir runs/feature_a0.7 --device $DEVICE
+    # ── R50 → R18 ─────────────────────────────────────────────────────────────
+    run_exp resnet18 resnet50 logit   "${SEED}" "${TEACHER_R50}"
+    run_exp resnet18 resnet50 feature "${SEED}" "${TEACHER_R50}"
 
-echo "============================================"
-echo "Ablation complete!"
-echo "============================================"
+    # ── R34 → R18 ─────────────────────────────────────────────────────────────
+    run_exp resnet18 resnet34 logit   "${SEED}" "${TEACHER_R34}"
+    run_exp resnet18 resnet34 feature "${SEED}" "${TEACHER_R34}"
+
+    # ── R50 → R34 ─────────────────────────────────────────────────────────────
+    run_exp resnet34 resnet50 logit   "${SEED}" "${TEACHER_R50}"
+    run_exp resnet34 resnet50 feature "${SEED}" "${TEACHER_R50}"
+
+done
+
+# ── Summary ───────────────────────────────────────────────────────────────────
+echo ""
+echo "======================================================"
+echo "  Ablation complete  (${COUNT}/${TOTAL} attempted)"
+if [[ ${#FAILED[@]} -gt 0 ]]; then
+    echo "  FAILED runs (${#FAILED[@]}):"
+    for f in "${FAILED[@]}"; do echo "    - ${f}"; done
+    exit 1
+else
+    echo "  All runs succeeded."
+fi
+echo "======================================================"
