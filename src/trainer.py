@@ -131,7 +131,8 @@ class Trainer:
             )
 
             losses["loss_total"].backward()
-            nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+            all_params = list(self.model.parameters()) + list(self.loss_fn.parameters())
+            nn.utils.clip_grad_norm_(all_params, 1.0)
             self.optimizer.step()
 
             for k, v in losses.items():
