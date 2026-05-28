@@ -43,6 +43,11 @@ run_exp() {
     echo ""
     echo "── [${COUNT}/${TOTAL}] ${tag} ──────────────────────────────────"
 
+    if [[ -f "${out}/checkpoint_best.pth" ]]; then
+        echo "  SKIP: checkpoint already exists — ${out}/checkpoint_best.pth"
+        return
+    fi
+
     if [[ ! -f "${teacher_ckpt}" ]]; then
         echo "  SKIP: teacher checkpoint not found: ${teacher_ckpt}"
         FAILED+=("${tag} (missing teacher weights)")

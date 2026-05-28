@@ -1,0 +1,24 @@
+# R50 → R18  |  Feature-KD (multi-layer alignment)
+#
+# Capacity gap: R50 (23.5M) → R18 (11.2M)
+# Cross-family distillation: student (R18) channel widths are 4× narrower than
+# teacher (R50) at every stage, so each 1×1 projection expands the student
+# features before computing MSE / cosine alignment.
+# student: 64/128/256/512   teacher: 256/512/1024/2048
+
+model:           resnet18
+teacher:         resnet50
+
+kd_type:         feature
+alpha:           0.5        # L_total = 0.5·L_feat + 0.5·L_ce
+feat_beta:       0.5        # L_feat = L_mse + 0.5·L_cos
+
+epochs:          100
+batch_size:      128
+lr:              0.1
+weight_decay:    5.0e-4
+momentum:        0.9
+
+seed:            42
+num_workers:     4
+output_dir:      runs/r50_to_r18_feature
