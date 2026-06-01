@@ -1,11 +1,9 @@
 # Student Capacity Moderates Knowledge Distillation Effectiveness
 ### A Systematic Study Across ResNet Teacher-Student Pairs on CIFAR-10
 
-[![arXiv](https://img.shields.io/badge/arXiv-coming%20soon-b31b1b.svg)]()
+[![arXiv](https://img.shields.io/badge/arXiv-2605.31191-b31b1b.svg)](https://arxiv.org/abs/2605.31191)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)]()
-
-> **Umut Onur Yaşar** · [umutonuryasar@gmail.com](mailto:umutonuryasar@gmail.com)
 
 ---
 
@@ -181,7 +179,8 @@ If you use this code or build on these findings, please cite:
              A Systematic Study Across ResNet Teacher-Student Pairs on CIFAR-10},
   author  = {Ya{\c{s}}ar, Umut Onur},
   year    = {2026},
-  note    = {arXiv preprint (coming soon)}
+  eprint  = {2605.31191},
+  archivePrefix = {arXiv}
 }
 ```
 
