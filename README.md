@@ -2,6 +2,7 @@
 ### A Systematic Study Across ResNet Teacher-Student Pairs on CIFAR-10
 
 [![arXiv](https://img.shields.io/badge/arXiv-2605.31191-b31b1b.svg)](https://arxiv.org/abs/2605.31191)
+[![HF Spaces](https://img.shields.io/badge/HF%20Spaces-Demo-orange.svg)](https://huggingface.co/spaces/umutonuryasar/kd-capacity-gap)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)]()
 
@@ -13,6 +14,10 @@ This repository contains the full code and results for a systematic study of kno
 
 1. **Student capacity**, not raw teacher-student accuracy gap, is the key moderating factor in KD effectiveness — R34 students consistently benefit more from distillation than R18 students, even when gap magnitudes are comparable.
 2. **Implementation correctness** critically affects Feature-KD: an unclipped projection-layer gradient suppresses Feature-KD performance and produces misleading comparisons with Logit-KD. After correction, Feature-KD matches or outperforms Logit-KD in two of three pairs.
+
+## Demo
+
+Interactive results explorer available on HF Spaces: [huggingface.co/spaces/umutonuryasar/kd-capacity-gap](https://huggingface.co/spaces/umutonuryasar/kd-capacity-gap)
 
 ---
 
