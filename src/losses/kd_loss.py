@@ -41,6 +41,7 @@ class KDLoss(nn.Module):
         alpha: float = 0.5,
         temperature: float = 4.0,
         feat_beta: float = 0.5,
+        feat_norm: str = "none",
         student_channels: dict[str, int] | None = None,
         teacher_channels: dict[str, int] | None = None,
     ):
@@ -59,6 +60,7 @@ class KDLoss(nn.Module):
                 student_channels=student_channels,  # None → RESNET_BASIC_CHANNELS default
                 teacher_channels=teacher_channels,  # None → RESNET_BOTTLENECK_CHANNELS default
                 beta=feat_beta,
+                feat_norm=feat_norm,
             )
         else:
             self.kd_loss_fn = None

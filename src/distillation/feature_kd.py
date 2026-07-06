@@ -54,10 +54,14 @@ class FeatureKDLoss(nn.Module):
         teacher_channels: dict[str, int] | None = None,
         beta: float = 0.5,
         layers: list[str] | None = None,
+        feat_norm: str = "none",
     ):
         super().__init__()
-        self.beta   = beta
-        self.layers = layers or ["layer1", "layer2", "layer3", "layer4"]
+        assert feat_norm in ("none", "teacher_std"), \
+            f"feat_norm must be 'none' or 'teacher_std', got '{feat_norm}'"
+        self.beta      = beta
+        self.feat_norm = feat_norm
+        self.layers    = layers or ["layer1", "layer2", "layer3", "layer4"]
 
         s_ch_map = student_channels or RESNET_BASIC_CHANNELS
         t_ch_map = teacher_channels or RESNET_BOTTLENECK_CHANNELS
@@ -88,9 +92,6 @@ class FeatureKDLoss(nn.Module):
               'loss_cos': averaged cosine loss across layers.
               'loss_kd':  loss_mse + beta * loss_cos.
         """
-        device = next(iter(student_features.values())).device
-        dtype  = next(iter(student_features.values())).dtype
-
         mse_losses = []
         cos_losses = []
 
@@ -98,20 +99,32 @@ class FeatureKDLoss(nn.Module):
             s = student_features[layer]  # [B, C_s, H, W]
             t = teacher_features[layer]  # [B, C_t, H, W]
 
-            # Project student to teacher channel dim
-            proj_weight = self.projections[layer].weight.to(device=device, dtype=dtype)
-            s_proj = F.conv2d(s, proj_weight)  # [B, C_t, H, W]
+            # Project student to teacher channel dim. The module lives on the
+            # correct device already (Trainer moves loss_fn to device).
+            s_proj = self.projections[layer](s)  # [B, C_t, H, W]
 
             # Align spatial dims if needed
             if s_proj.shape[-2:] != t.shape[-2:]:
                 s_proj = F.adaptive_avg_pool2d(s_proj, t.shape[-2:])
 
+            t = t.detach()
+
+            # Optional scale normalization: raw MSE depends on the magnitude
+            # of teacher features, which grows with teacher depth and differs
+            # per layer. 'teacher_std' divides both sides by the teacher's
+            # per-layer std (detached), making the loss scale-invariant and
+            # the alpha grid comparable across teacher architectures.
+            if self.feat_norm == "teacher_std":
+                scale  = t.std().clamp_min(1e-6)
+                s_proj = s_proj / scale
+                t      = t / scale
+
             # MSE loss
-            mse_losses.append(F.mse_loss(s_proj, t.detach()))
+            mse_losses.append(F.mse_loss(s_proj, t))
 
             # Cosine similarity on globally pooled features
-            s_gap = s_proj.mean(dim=[2, 3])       # [B, C_t]
-            t_gap = t.detach().mean(dim=[2, 3])   # [B, C_t]
+            s_gap = s_proj.mean(dim=[2, 3])   # [B, C_t]
+            t_gap = t.mean(dim=[2, 3])        # [B, C_t]
             cos_sim = F.cosine_similarity(s_gap, t_gap, dim=-1)
             cos_losses.append((1.0 - cos_sim).mean())
 
@@ -126,4 +139,4 @@ class FeatureKDLoss(nn.Module):
         }
 
     def extra_repr(self) -> str:
-        return f"layers={self.layers}, beta={self.beta}"
+        return f"layers={self.layers}, beta={self.beta}, feat_norm={self.feat_norm}"

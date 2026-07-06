@@ -1,20 +1,20 @@
-# R34 -> R18  |  Feature-KD (multi-layer alignment)
+# R101 -> R34  |  Logit-KD
 #
-# Capacity: R34 (21.3M, BasicBlock) -> R18 (11.2M, BasicBlock)
+# Capacity: R101 (42.5M, Bottleneck) -> R34 (21.3M, BasicBlock)
 # Parameter counts are for the CIFAR-adapted models (3x3 stem, 10-class fc).
 #
-# NOTE: alpha below are placeholders. Final values are selected on the
+# NOTE: alpha/T below are placeholders. Final values are selected on the
 # 5k val split by stage 1 (tools/run_ablation.sh) and recorded in
 # best_configs.json; stage 2 (tools/run_final.sh) consumes that file directly.
 # These configs exist for convenient single-run reproduction.
 
-model:           resnet18
-teacher:         resnet34
-teacher-weights: checkpoints/teacher_r34.pth
+model:           resnet34
+teacher:         resnet101
+teacher-weights: checkpoints/teacher_r101.pth
 
-kd_type:         feature
+kd_type:         logit
 alpha:           0.5
-feat_beta:       0.5        # L_feat = L_mse + 0.5*L_cos
+temperature:     3.0        # T in {2,3,4} grid
 
 epochs:          100
 batch_size:      128
@@ -24,4 +24,4 @@ momentum:        0.9
 
 seed:            0          # final results average over seeds {0,1,2,3,4}
 num_workers:     4
-output_dir:      runs/manual/r34_to_r18_feature
+output_dir:      runs/manual/r101_to_r34_logit

@@ -1,16 +1,20 @@
-# R50 → R18  |  Logit-KD (Hinton et al., 2015)
+# R50 -> R18  |  Logit-KD
 #
-# Capacity gap: R50 (23.5M) → R18 (11.2M)
-# Cross-family distillation: Bottleneck teacher (R50, 256/512/1024/2048 channels)
-# to BasicBlock student (R18, 64/128/256/512 channels).
-# The logit-KD loss is architecture-agnostic so no channel alignment is needed.
+# Capacity: R50 (23.5M, Bottleneck) -> R18 (11.2M, BasicBlock)
+# Parameter counts are for the CIFAR-adapted models (3x3 stem, 10-class fc).
+#
+# NOTE: alpha/T below are placeholders. Final values are selected on the
+# 5k val split by stage 1 (tools/run_ablation.sh) and recorded in
+# best_configs.json; stage 2 (tools/run_final.sh) consumes that file directly.
+# These configs exist for convenient single-run reproduction.
 
 model:           resnet18
 teacher:         resnet50
+teacher-weights: checkpoints/teacher_r50.pth
 
 kd_type:         logit
-alpha:           0.5        # L_total = 0.5·L_kd + 0.5·L_ce
-temperature:     4.0
+alpha:           0.5
+temperature:     3.0        # T in {2,3,4} grid
 
 epochs:          100
 batch_size:      128
@@ -18,6 +22,6 @@ lr:              0.1
 weight_decay:    5.0e-4
 momentum:        0.9
 
-seed:            42
+seed:            0          # final results average over seeds {0,1,2,3,4}
 num_workers:     4
-output_dir:      runs/r50_to_r18_logit
+output_dir:      runs/manual/r50_to_r18_logit

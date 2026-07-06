@@ -23,8 +23,45 @@ Interactive results explorer available on HF Spaces: [huggingface.co/spaces/umut
 
 ## Key Results
 
-| Teacher | Student | T-S Gap | Logit-KD Δ | Feature-KD Δ | Best |
-|---------|---------|---------|------------|--------------|------|
+Results tables will be regenerated under the v2 evaluation protocol (see below).
+v1 numbers were selected on the test set and are therefore superseded.
+
+---
+
+## Evaluation Protocol (v2)
+
+- CIFAR-10 train (50k) is split once, deterministically (fixed `SPLIT_SEED=1234`,
+  independent of run seeds), into **45k train / 5k val**.
+- **All** model and hyperparameter selection happens on the val split.
+- The 10k test set is evaluated exactly twice per run: with the best-val
+  checkpoint and with the final-epoch checkpoint. Both are reported.
+- Two-stage experiment protocol:
+  1. **Selection** (`tools/run_ablation.sh`): full hyperparameter grid, seed 0,
+     compared by val accuracy. `tools/collect_results.py --write-best` records
+     the winning config per (pair, KD method).
+  2. **Final** (`tools/run_final.sh`): best configs and baselines re-run with
+     seeds {0,1,2,3,4}; the paper reports `test_acc_best` as mean ± std.
+- Fidelity metrics (`tools/eval.py`): teacher-student top-1 agreement,
+  KL(p_T‖p_S) at T∈{1,4}, per-class accuracy — computed on every final run.
+- Stem ablation (`tools/run_stem_ablation.sh`): ImageNet stem vs CIFAR stem,
+  quantifying the "Architecture Dominates KD" claim.
+
+## Reproducing
+
+```bash
+pip install -r requirements.txt
+bash tools/train_teachers.sh                                        # R50, R34, R101 (3 seeds each)
+bash tools/run_ablation.sh                                          # Stage 1: selection grid
+python tools/collect_results.py runs/select --write-best best_configs.json
+bash tools/run_final.sh                                             # Stage 2: 5-seed finals + fidelity
+bash tools/run_stem_ablation.sh                                     # Stem ablation
+python tools/collect_results.py runs/final --csv final_results.csv
+```
+
+CIFAR-10 downloads automatically to `data/` on first run.
+
+---
+------|---------|---------|------------|--------------|------|
 | R34 (95.70%) | R18 (95.13%) | 0.57 pp | +0.00 pp | +0.18 pp | Feature |
 | R50 (95.81%) | R18 (95.13%) | 0.68 pp | +0.21 pp | +0.08 pp | Logit |
 | R50 (95.81%) | R34 (95.25%) | 0.56 pp | +0.21 pp | **+0.30 pp** | Feature |

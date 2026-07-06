@@ -1,7 +1,6 @@
 torch>=2.0.0
 torchvision>=0.15.0
-pyyaml
-tqdm
-tensorboard
-matplotlib
-numpy
+pyyaml>=6.0
+tensorboard>=2.14
+matplotlib>=3.7
+numpy>=1.24

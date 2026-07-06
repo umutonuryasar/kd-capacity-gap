@@ -1,79 +1,57 @@
 #!/bin/bash
-# Train R50 and R34 teacher models on CIFAR-10 from scratch.
+# Train R50, R34, and R101 teacher models on CIFAR-10 from scratch.
 #
-# Both models use the CIFAR-specific stem: 3×3 conv (stride=1) + Identity
-# maxpool instead of the ImageNet 7×7 conv (stride=2) + MaxPool. This is
-# handled automatically by build_resnet() in src/models/resnet.py.
-#
-# Checkpoints are saved to:
-#   checkpoints/teacher_r50.pth
-#   checkpoints/teacher_r34.pth
+# All models use the CIFAR-specific stem (3x3/s1 + Identity); handled by
+# build_resnet() in src/models/resnet.py. Teachers are trained with 3 seeds
+# so that teacher variance can be reported (paper v1 limitation).
+# The seed-0 checkpoint is lifted to the canonical flat path used by KD runs.
 #
 # Override defaults via environment:
 #   EPOCHS=200 DEVICE=cuda:1 bash tools/train_teachers.sh
-#
-# Skip a model if its checkpoint already exists. Delete the file to retrain.
 
 set -euo pipefail
 
 EPOCHS="${EPOCHS:-200}"
 BS="${BS:-128}"
 LR="${LR:-0.1}"
-SEED="${SEED:-0}"
+SEEDS=(0 1 2)
 DEVICE="${DEVICE:-cuda}"
 
 CKPT_DIR="checkpoints"
 mkdir -p "${CKPT_DIR}"
 
-# ── Helper ────────────────────────────────────────────────────────────────────
 train_teacher() {
-    local arch=$1                               # e.g. resnet50
-    local short=$2                              # e.g. r50
+    local arch=$1 short=$2
     local ckpt="${CKPT_DIR}/teacher_${short}.pth"
-    local outdir="runs/teachers/${short}"
 
-    echo ""
-    echo "══════════════════════════════════════════════════════"
-    echo "  Teacher: ${arch}  →  ${ckpt}"
-    echo "  Epochs: ${EPOCHS}  |  LR: ${LR}  |  Seed: ${SEED}"
-    echo "══════════════════════════════════════════════════════"
+    for SEED in "${SEEDS[@]}"; do
+        local outdir="runs/teachers/${short}/seed${SEED}"
+        if [[ -f "${outdir}/results.json" ]]; then
+            echo "  SKIP ${arch} seed${SEED} — already trained."
+            continue
+        fi
+        echo ""
+        echo "══════════════════════════════════════════════════════"
+        echo "  Teacher: ${arch} seed${SEED}  |  Epochs: ${EPOCHS}"
+        echo "══════════════════════════════════════════════════════"
+        python tools/train.py \
+            --model "${arch}" --kd-type none \
+            --seed "${SEED}" --epochs "${EPOCHS}" --batch-size "${BS}" \
+            --lr "${LR}" --device "${DEVICE}" --output-dir "${outdir}"
+    done
 
-    if [[ -f "${ckpt}" ]]; then
-        echo "  Already exists — skipping. Delete ${ckpt} to retrain."
-        return
-    fi
-
-    python tools/train.py \
-        --model        "${arch}"    \
-        --kd-type      none         \
-        --seed         "${SEED}"    \
-        --epochs       "${EPOCHS}"  \
-        --batch-size   "${BS}"      \
-        --lr           "${LR}"      \
-        --device       "${DEVICE}"  \
-        --output-dir   "${outdir}"
-
-    # Lift the best checkpoint to the canonical flat path
-    cp "${outdir}/checkpoint_best.pth" "${ckpt}"
-    echo "  Saved: ${ckpt}"
+    # Canonical checkpoint used by all KD runs = seed 0, best-val weights
+    cp "runs/teachers/${short}/seed0/checkpoint_best.pth" "${ckpt}"
+    echo "  Saved canonical teacher: ${ckpt}"
 }
 
-# ── Train teachers ────────────────────────────────────────────────────────────
-train_teacher resnet50 r50
-train_teacher resnet34 r34
+train_teacher resnet50  r50
+train_teacher resnet34  r34
+train_teacher resnet101 r101
 
-# ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo "══════════════════════════════════════════════════════"
-echo "  Teacher training complete."
-for ckpt in "${CKPT_DIR}/teacher_r50.pth" "${CKPT_DIR}/teacher_r34.pth"; do
-    if [[ -f "${ckpt}" ]]; then
-        echo "  ✓ ${ckpt}"
-    else
-        echo "  ✗ MISSING: ${ckpt}"
-    fi
-done
-echo ""
-echo "  Run distillation experiments with:"
-echo "    bash tools/run_ablation.sh"
+echo "  Teacher training complete. Teacher stats:"
+echo "    python tools/collect_results.py runs/teachers"
+echo "  Next: bash tools/run_ablation.sh"
 echo "══════════════════════════════════════════════════════"

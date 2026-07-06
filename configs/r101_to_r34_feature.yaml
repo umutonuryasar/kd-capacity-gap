@@ -1,6 +1,6 @@
-# R34 -> R18  |  Feature-KD (multi-layer alignment)
+# R101 -> R34  |  Feature-KD (multi-layer alignment)
 #
-# Capacity: R34 (21.3M, BasicBlock) -> R18 (11.2M, BasicBlock)
+# Capacity: R101 (42.5M, Bottleneck) -> R34 (21.3M, BasicBlock)
 # Parameter counts are for the CIFAR-adapted models (3x3 stem, 10-class fc).
 #
 # NOTE: alpha below are placeholders. Final values are selected on the
@@ -8,9 +8,9 @@
 # best_configs.json; stage 2 (tools/run_final.sh) consumes that file directly.
 # These configs exist for convenient single-run reproduction.
 
-model:           resnet18
-teacher:         resnet34
-teacher-weights: checkpoints/teacher_r34.pth
+model:           resnet34
+teacher:         resnet101
+teacher-weights: checkpoints/teacher_r101.pth
 
 kd_type:         feature
 alpha:           0.5
@@ -24,4 +24,4 @@ momentum:        0.9
 
 seed:            0          # final results average over seeds {0,1,2,3,4}
 num_workers:     4
-output_dir:      runs/manual/r34_to_r18_feature
+output_dir:      runs/manual/r101_to_r34_feature
