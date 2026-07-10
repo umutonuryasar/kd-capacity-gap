@@ -130,6 +130,11 @@ class Trainer:
             "feat_beta":      self.cfg.get("feat_beta"),
             "stem":           self.cfg.get("stem", "cifar"),
             "seed":           self.cfg.get("seed"),
+            "no_proj_clip":   bool(self.cfg.get("no_proj_clip", False)),
+            "grad_norm_max_overall":
+                max((h.get("grad_norm_max", 0.0) for h in self.history), default=0.0),
+            "proj_grad_norm_max_overall":
+                max((h.get("proj_grad_norm_max", 0.0) for h in self.history), default=0.0),
             "epochs":         self.cfg.get("epochs"),
             "best_val_acc":   self.best_val_acc,
             "best_val_epoch": self.best_val_epoch,
@@ -149,6 +154,8 @@ class Trainer:
 
         running: dict[str, float] = {}
         correct, total = 0, 0
+        epoch_grad_norm_max = 0.0
+        epoch_proj_norm_max = 0.0
 
         for images, labels in self.train_loader:
             images = images.to(self.device)
@@ -181,9 +188,23 @@ class Trainer:
 
             losses["loss_total"].backward()
             # Clip the union of student and projection-layer parameters.
-            # Excluding projections was the v1 bug (paper §4.2, Table 1).
-            all_params = list(self.model.parameters()) + list(self.loss_fn.parameters())
-            nn.utils.clip_grad_norm_(all_params, 1.0)
+            # Excluding projections was the v1 bug (paper §4.2); the
+            # no_proj_clip flag reproduces that bug deliberately for the
+            # bugged-vs-corrected ablation. In both modes we record the
+            # pre-clip gradient norms as evidence.
+            if self.cfg.get("no_proj_clip"):
+                total_norm = nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                proj_grads = [p.grad for p in self.loss_fn.parameters()
+                              if p.grad is not None]
+                if proj_grads:
+                    proj_norm = torch.norm(
+                        torch.stack([g.norm() for g in proj_grads])
+                    ).item()
+                    epoch_proj_norm_max = max(epoch_proj_norm_max, proj_norm)
+            else:
+                all_params = list(self.model.parameters()) + list(self.loss_fn.parameters())
+                total_norm = nn.utils.clip_grad_norm_(all_params, 1.0)
+            epoch_grad_norm_max = max(epoch_grad_norm_max, float(total_norm))
             self.optimizer.step()
 
             for k, v in losses.items():
@@ -198,6 +219,9 @@ class Trainer:
         n = len(self.train_loader)
         avg = {k: v / n for k, v in running.items()}
         avg["train_acc"] = correct / total
+        avg["grad_norm_max"] = epoch_grad_norm_max
+        if epoch_proj_norm_max > 0:
+            avg["proj_grad_norm_max"] = epoch_proj_norm_max
         return avg
 
     @torch.no_grad()

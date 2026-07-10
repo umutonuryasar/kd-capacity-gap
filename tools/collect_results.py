@@ -57,6 +57,8 @@ def main() -> None:
     groups: dict[tuple, list[dict]] = defaultdict(list)
     for r in runs:
         kd = r.get("kd_type", "none")
+        if r.get("no_proj_clip"):
+            kd = f"{kd}(bugged)"
         key = (
             r.get("teacher") or "-",
             r.get("model"),

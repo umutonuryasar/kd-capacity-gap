@@ -101,6 +101,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Softmax temperature T for logit KD.")
     p.add_argument("--feat-beta", type=float, default=0.5,
                    help="Cosine similarity weight inside FeatureKD.")
+    p.add_argument("--no-proj-clip", action="store_true",
+                   help="BUG-REPRODUCTION MODE: exclude Feature-KD projection "
+                        "layers from gradient clipping, replicating the v1 bug. "
+                        "Only for the bugged-vs-corrected ablation.")
     p.add_argument("--feat-norm", default="none", choices=["none", "teacher_std"],
                    help="Feature scale normalization inside FeatureKD. "
                         "'teacher_std' makes MSE scale-invariant across teachers.")
