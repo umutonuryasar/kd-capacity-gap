@@ -10,10 +10,13 @@
 
 ## Overview
 
-This repository contains the full code and results for a systematic study of knowledge distillation (KD) effectiveness across three ResNet teacher-student capacity pairs on CIFAR-10. We compare Logit-KD and Feature-KD under controlled, reproducible conditions (3 seeds, mean ± std reported throughout) and identify two key findings:
+This repository contains the full code and results for a systematic study of knowledge distillation (KD) effectiveness across **four** ResNet teacher-student capacity pairs on CIFAR-10. Logit-KD and Feature-KD are compared under a leakage-free protocol: hyperparameters and checkpoints selected on a held-out validation split, selected configurations re-run with **5 seeds**, and the test set used exclusively for final reporting — alongside distillation *fidelity* metrics (teacher-student agreement, KL divergence).
 
-1. **Student capacity**, not raw teacher-student accuracy gap, is the key moderating factor in KD effectiveness — R34 students consistently benefit more from distillation than R18 students, even when gap magnitudes are comparable.
-2. **Implementation correctness** critically affects Feature-KD: an unclipped projection-layer gradient suppresses Feature-KD performance and produces misleading comparisons with Logit-KD. After correction, Feature-KD matches or outperforms Logit-KD in two of three pairs.
+Key findings (v2):
+
+1. **Student capacity moderates KD** — the only statistically significant gains belong to R34 students under Feature-KD; doubling teacher size at fixed teacher accuracy (R50 → R101) leaves the gain unchanged.
+2. **Feature-KD ≥ Logit-KD in all four pairs**, and Feature-KD students land closer to the teacher's output distribution despite never observing teacher logits.
+3. **v1 correction** — the gradient-clipping bug blamed in v1 for Feature-KD's underperformance had *no measurable effect* on controlled re-run; v1's larger gains are explained by test-set hyperparameter selection.
 
 ## Demo
 
