@@ -1,0 +1,2 @@
+Teacher,Student,KD,alpha,T,Stem,Seeds,Val acc (%),Test@best (%),Test@final (%)
+resnet50,resnet18,feature(bugged),0.7,-,cifar,"5 [0, 1, 2, 3, 4]",95.40 ± 0.20,95.00 ± 0.18,94.99 ± 0.18

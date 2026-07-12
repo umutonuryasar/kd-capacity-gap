@@ -106,10 +106,12 @@ def main() -> None:
         print(" | ".join(c.ljust(w) for c, w in zip(r["cells"], widths)))
 
     if args.csv:
-        with open(args.csv, "w") as f:
-            f.write(",".join(header) + "\n")
+        import csv as _csv
+        with open(args.csv, "w", newline="") as f:
+            w = _csv.writer(f, quoting=_csv.QUOTE_MINIMAL)
+            w.writerow(header)
             for r in rows:
-                f.write(",".join(str(c) for c in r["cells"]) + "\n")
+                w.writerow(r["cells"])
         print(f"\nWrote {args.csv}")
 
     if args.write_best:

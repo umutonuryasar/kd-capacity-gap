@@ -1,0 +1,4 @@
+Teacher,Student,KD,alpha,T,Stem,Seeds,Val acc (%),Test@best (%),Test@final (%)
+-,resnet101,none,-,-,cifar,"3 [0, 1, 2]",95.95 ± 0.15,95.37 ± 0.12,95.42 ± 0.29
+-,resnet34,none,-,-,cifar,"3 [0, 1, 2]",95.95 ± 0.06,95.30 ± 0.09,95.38 ± 0.03
+-,resnet50,none,-,-,cifar,"3 [0, 1, 2]",96.07 ± 0.22,95.36 ± 0.18,95.41 ± 0.30

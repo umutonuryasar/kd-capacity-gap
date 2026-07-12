@@ -21,12 +21,40 @@ Interactive results explorer available on HF Spaces: [huggingface.co/spaces/umut
 
 ---
 
-## Key Results
+## Key Results (v2 protocol)
 
-Results tables will be regenerated under the v2 evaluation protocol (see below).
-v1 numbers were selected on the test set and are therefore superseded.
+KD gain over baseline (test acc, mean over 5 seeds; * = p<0.05, Welch vs. baseline):
 
----
+| Pair | Logit-KD Δ | Feature-KD Δ | Best | Teacher-student agreement (best) |
+|------|-----------|--------------|------|----------------------------------|
+| R34→R18  | −0.08 pp | +0.13 pp  | Feature | 95.53% |
+| R50→R18  | +0.06 pp | +0.10 pp  | Feature | 95.49% |
+| R50→R34  | +0.08 pp | **+0.19 pp*** | Feature | 95.41% |
+| R101→R34 | +0.06 pp | **+0.21 pp*** | Feature | 95.53% |
+
+Baselines: R18 94.86 ± 0.14, R34 95.04 ± 0.13. Teachers (3 seeds): R34 95.30,
+R50 95.36, R101 95.37.
+
+Headline findings:
+- **Student capacity moderates KD**: the only significant gains belong to R34
+  students under Feature-KD. Doubling teacher size at fixed teacher accuracy
+  (R50 → R101) leaves the gain unchanged — the moderating variable sits on
+  the student side.
+- **Feature-KD ≥ Logit-KD in all four pairs**, and Feature-KD students land
+  closer to the teacher's T=1 output distribution (KL 0.14–0.19 vs 0.21–0.28)
+  despite never observing teacher logits.
+- **Fidelity decouples from accuracy**: top-1 teacher-student agreement is
+  flat (95.3–95.5%) across all cells.
+- **Architecture dominates KD**: the CIFAR stem correction is worth
+  +5.50 to +7.15 pp — more than 25× the largest KD gain.
+- **v1 correction**: the gradient-clipping bug blamed in v1 had no measurable
+  effect on controlled re-run (bugged 95.00 ± 0.18 vs corrected 94.95 ± 0.20,
+  p=0.69; unclipped projection norms ≤ 0.21 against a threshold of 1.0). v1's
+  larger gains are explained by test-set hyperparameter selection.
+
+Full per-pair tables, fidelity metrics, and statistics: see the paper (v2)
+and [`results/`](results/). Regenerate figures with
+`python tools/make_figures.py`.
 
 ## Evaluation Protocol (v2)
 
