@@ -92,14 +92,6 @@ python tools/collect_results.py runs/final --csv final_results.csv
 CIFAR-10 downloads automatically to `data/` on first run.
 
 ---
-------|---------|---------|------------|--------------|------|
-| R34 (95.70%) | R18 (95.13%) | 0.57 pp | +0.00 pp | +0.18 pp | Feature |
-| R50 (95.81%) | R18 (95.13%) | 0.68 pp | +0.21 pp | +0.08 pp | Logit |
-| R50 (95.81%) | R34 (95.25%) | 0.56 pp | +0.21 pp | **+0.30 pp** | Feature |
-
-All gains relative to the corresponding student baseline. Results reported as mean ± std across seeds {0, 1, 2}.
-
----
 
 ## Repository Structure
 
@@ -111,9 +103,12 @@ kd-capacity-gap/
 │   ├── r50_to_r18_logit.yaml
 │   ├── r50_to_r18_feature.yaml
 │   ├── r50_to_r34_logit.yaml
-│   └── r50_to_r34_feature.yaml
+│   ├── r50_to_r34_feature.yaml
+│   ├── r101_to_r34_logit.yaml
+│   └── r101_to_r34_feature.yaml
 ├── notebooks/
-│   └── run_experiments.ipynb # Result aggregation and plotting
+│   └── run_experiments.ipynb # Colab harness for the experiment scripts
+├── results/                  # Final CSVs, selected configs, raw per-run JSON
 ├── src/
 │   ├── distillation/         # Logit-KD and Feature-KD loss implementations
 │   ├── losses/
@@ -123,8 +118,14 @@ kd-capacity-gap/
 │   └── trainer.py
 ├── tools/
 │   ├── train.py              # Single-run training entry point
-│   ├── train_teachers.sh     # Train all teacher models
-│   ├── run_ablation.sh       # Run full ablation across seeds and configs
+│   ├── eval.py               # Fidelity metrics (agreement, KL, per-class acc)
+│   ├── train_teachers.sh     # Train all teacher models (3 seeds each)
+│   ├── run_ablation.sh       # Stage 1: selection grid, seed 0, compared on val
+│   ├── run_final.sh          # Stage 2: selected configs + baselines, 5 seeds
+│   ├── run_stem_ablation.sh  # ImageNet stem vs CIFAR stem
+│   ├── run_bug_ablation.sh   # Controlled re-run of the v1 clipping bug
+│   ├── collect_results.py    # Aggregate runs into CSV / best_configs.json
+│   ├── make_figures.py       # Regenerate the paper figures
 │   └── __init__.py
 ├── requirements.txt
 └── LICENSE
@@ -145,7 +146,10 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 ```
 
-Seeds used: **{0, 1, 2}**. Results in the paper are mean ± std across all three seeds.
+Seeds: selection grid on seed **0**; final runs (selected configs and
+baselines) on seeds **{0, 1, 2, 3, 4}**, reported as mean ± std; teachers on 3
+seeds. The train/val split uses its own fixed `SPLIT_SEED=1234`, independent
+of the run seed.
 
 ---
 
@@ -153,7 +157,7 @@ Seeds used: **{0, 1, 2}**. Results in the paper are mean ± std across all three
 
 | Hyperparameter | Value |
 |----------------|-------|
-| Dataset | CIFAR-10 (50k train / 10k test) |
+| Dataset | CIFAR-10 (45k train / 5k val / 10k test) |
 | Input resolution | 32×32 |
 | Optimizer | SGD (momentum=0.9, weight_decay=5e-4, Nesterov=True) |
 | Learning rate | 0.1 with CosineAnnealingLR (T_max=100, η_min=1e-4) |
@@ -164,9 +168,11 @@ Seeds used: **{0, 1, 2}**. Results in the paper are mean ± std across all three
 
 ### KD Hyperparameter Grid
 
-**Logit-KD:** α ∈ {0.3, 0.5, 0.7}, T ∈ {2, 3, 4} — best per pair reported.
+**Logit-KD:** α ∈ {0.3, 0.5, 0.7}, T ∈ {2, 3, 4} — selected per pair on val accuracy (seed 0).
 
-**Feature-KD:** α ∈ {0.3, 0.5, 0.7}, β = 0.5 — best per pair reported.
+**Feature-KD:** α ∈ {0.3, 0.5, 0.7}, β = 0.5 — selected per pair on val accuracy (seed 0).
+
+Selected configurations are recorded in [`results/best_configs.json`](results/best_configs.json).
 
 ### Architecture
 
@@ -174,9 +180,13 @@ All models use a **CIFAR-specific stem**: the standard ResNet `conv1` (kernel=7,
 
 | Model | Params | Block type |
 |-------|--------|------------|
+| ResNet-101 (teacher) | 42.5M | Bottleneck |
 | ResNet-50 (teacher) | 23.5M | Bottleneck |
-| ResNet-34 (teacher / student) | 21.8M | BasicBlock |
+| ResNet-34 (teacher / student) | 21.3M | BasicBlock |
 | ResNet-18 (student) | 11.2M | BasicBlock |
+
+Parameter counts are for the CIFAR-stem, 10-class models as built by
+`src/models/resnet.py`.
 
 ---
 
@@ -184,14 +194,20 @@ All models use a **CIFAR-specific stem**: the standard ResNet `conv1` (kernel=7,
 
 ### Gradient Clipping Bug
 
-A common implementation oversight in Feature-KD is excluding projection layer parameters from gradient clipping. In this repo, clipping is applied to the **union** of student model parameters and Feature-KD projection layer parameters:
+Clipping is applied to the **union** of student model parameters and Feature-KD projection layer parameters:
 
 ```python
 params = list(student.parameters()) + list(projection_layers.parameters())
 torch.nn.utils.clip_grad_norm_(params, max_norm=1.0)
 ```
 
-Excluding projection layers leads to unclipped gradient norms of up to **4.65** in early training, suppressing Feature-KD performance and producing misleading Logit-KD vs. Feature-KD comparisons. See Table 3 in the paper for a quantitative comparison.
+v1 of this work excluded the projection layers from clipping and blamed that
+for Feature-KD's underperformance. The v2 controlled re-run
+(`tools/run_bug_ablation.sh`, [`results/bug_ablation.csv`](results/bug_ablation.csv))
+does not support that: bugged 95.00 ± 0.18 vs corrected 94.95 ± 0.20 (p=0.69),
+with unclipped projection norms ≤ 0.21 against a threshold of 1.0. The union
+clipping is kept because it is the correct behaviour, not because it changes
+the result.
 
 ### Teacher Loading
 
@@ -219,12 +235,12 @@ python tools/train.py \
   --seed 0
 ```
 
-**Run full ablation across all pairs, methods, and seeds:**
+**Run the selection grid (Stage 1, seed 0) across all pairs and methods:**
 ```bash
 bash tools/run_ablation.sh
 ```
 
-All six configs follow the same naming convention:
+All eight configs follow the same naming convention:
 
 | Config file | Pair | Method |
 |-------------|------|--------|
@@ -234,11 +250,11 @@ All six configs follow the same naming convention:
 | `r50_to_r18_feature.yaml` | R50→R18 | Feature-KD |
 | `r50_to_r34_logit.yaml` | R50→R34 | Logit-KD |
 | `r50_to_r34_feature.yaml` | R50→R34 | Feature-KD |
+| `r101_to_r34_logit.yaml` | R101→R34 | Logit-KD |
+| `r101_to_r34_feature.yaml` | R101→R34 | Feature-KD |
 
-To reproduce full results across all seeds and pairs:
-```bash
-bash tools/run_all.sh
-```
+For the full two-stage protocol behind the reported numbers, see
+[Reproducing](#reproducing).
 
 ---
 
